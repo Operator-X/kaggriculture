@@ -8,11 +8,23 @@ LAND_ORDER = ["NE", "SW", "SE"]
 LAND_BUY_THRESHOLDS = [2000.0, 3500.0, 6000.0]
 
 CROPS = {
-    "WHEAT": {"seed_cost": 10, "max_yield_day": 4, "first_yield_day": 2, "ongoing": False},
-    "CARROT": {"seed_cost": 20, "max_yield_day": 3, "first_yield_day": 2, "ongoing": False},
-    "TOMATO": {"seed_cost": 50, "max_yield_day": 11, "first_yield_day": 8, "ongoing": True},
-    "STRAWBERRY": {"seed_cost": 100, "max_yield_day": 16, "first_yield_day": 10, "ongoing": True},
-    "MELON": {"seed_cost": 80, "max_yield_day": 10, "first_yield_day": 10, "ongoing": False},
+    "WHEAT": {"seed_cost": 10, "max_yield_day": 4, "first_yield_day": 2, "ongoing": False, "base_yield": 4, "base_price": 25.0},
+    "CARROT": {"seed_cost": 20, "max_yield_day": 3, "first_yield_day": 2, "ongoing": False, "base_yield": 3, "base_price": 35.0},
+    "TOMATO": {"seed_cost": 50, "max_yield_day": 11, "first_yield_day": 8, "ongoing": True, "base_yield": 4, "base_price": 60.0},
+    "STRAWBERRY": {"seed_cost": 100, "max_yield_day": 16, "first_yield_day": 10, "ongoing": True, "base_yield": 4, "base_price": 120.0},
+    "MELON": {"seed_cost": 80, "max_yield_day": 10, "first_yield_day": 10, "ongoing": False, "base_yield": 6, "base_price": 250.0},
+}
+
+BASE_PRICES = {
+    "WHEAT": 25.0,
+    "CARROT": 35.0,
+    "TOMATO": 60.0,
+    "STRAWBERRY": 120.0,
+    "MELON": 250.0,
+    "EGG": 50.0,
+    "MILK": 160.0,
+    "WOOL": 200.0,
+    "FERTILIZER": 100.0,
 }
 
 # Center / shed-adjacent tiles
@@ -110,18 +122,20 @@ def agent(observation, configuration=None):
                 # Avoid planting late in the day (hour 23) because they turn into weeds overnight
                 # Also stay within labor capacity limits to prevent crops dying from lack of watering
                 if hour < 23 and (active_crops_count + new_plant_tasks_count < max_plants_supported):
-                    # Check which seeds we actually have in stock and choose the most profitable one
-                    available_crops = [crop for crop, count in seeds_avail.items() if count > 0]
-                    if available_crops:
+                    # Check which seeds we actually have in stock and choose the most profitable eligible one
+                    remaining_days = 29 - day
+                    eligible_crops = [
+                        crop for crop, count in seeds_avail.items()
+                        if count > 0 and remaining_days >= CROPS[crop]["max_yield_day"]
+                    ]
+                    
+                    if eligible_crops:
                         best_crop = None
                         best_profit = -float("inf")
-                        for crop in available_crops:
-                            if crop == "WHEAT":
-                                profit = 4 * market_prices.get("WHEAT", 25) - 10
-                            elif crop == "CARROT":
-                                profit = 3 * market_prices.get("CARROT", 35) - 20
-                            else:
-                                profit = 0
+                        for crop in eligible_crops:
+                            crop_data = CROPS[crop]
+                            live_price = market_prices.get(crop, crop_data["base_price"])
+                            profit = crop_data["base_yield"] * live_price - crop_data["seed_cost"]
                             if profit > best_profit:
                                 best_profit = profit
                                 best_crop = crop
@@ -147,6 +161,19 @@ def agent(observation, configuration=None):
                             "pos": (x, y),
                             "action": "WATER",
                             "priority": 10
+                        })
+                    
+                    # Fertilizer application (Priority 15)
+                    # We fertilize Melons, Strawberries, and Tomatoes to accelerate growth or double yield
+                    if (
+                        crop in ("MELON", "STRAWBERRY", "TOMATO")
+                        and tile.get("fertilized_until_day", -1) < day
+                        and age < crop_data["max_yield_day"] - 2
+                    ):
+                        tasks.append({
+                            "pos": (x, y),
+                            "action": "FERTILIZE",
+                            "priority": 15
                         })
                     
                     # Harvesting (Priority 20)
@@ -232,6 +259,18 @@ def agent(observation, configuration=None):
                     _, dist_to_shed = get_closest_center(u_pos)
                     _, dist_shed_to_task = get_closest_center(task_pos)
                     dist = dist_to_shed + dist_shed_to_task
+            elif task_action == "FERTILIZE":
+                has_fert = u_inv.get("FERTILIZER", 0) > 0
+                shed_has_fert = private["shed"].get("FERTILIZER", 0) > 0
+                if not (has_fert or shed_has_fert):
+                    continue
+                
+                if has_fert:
+                    dist = get_distance(u_pos, task_pos)
+                else:
+                    _, dist_to_shed = get_closest_center(u_pos)
+                    _, dist_shed_to_task = get_closest_center(task_pos)
+                    dist = dist_to_shed + dist_shed_to_task
             else:
                 dist = get_distance(u_pos, task_pos)
                 
@@ -272,6 +311,18 @@ def agent(observation, configuration=None):
                     else:
                         cx, cy = get_closest_center(u_pos)[0]
                         unit_actions.append(route_towards(u_pos, (cx, cy)))
+            elif action == "FERTILIZE":
+                if u_inv.get("FERTILIZER", 0) > 0:
+                    if tuple(u_pos) == t_pos:
+                        unit_actions.append(["FERTILIZE"])
+                    else:
+                        unit_actions.append(route_towards(u_pos, t_pos))
+                else:
+                    if tuple(u_pos) in CENTER_TILES:
+                        unit_actions.append(["PICKUP", "FERTILIZER", 1])
+                    else:
+                        cx, cy = get_closest_center(u_pos)[0]
+                        unit_actions.append(route_towards(u_pos, (cx, cy)))
             else:
                 if tuple(u_pos) == t_pos:
                     if action == "WATER":
@@ -294,21 +345,27 @@ def agent(observation, configuration=None):
     # 5. Market orders planning
     market_orders = []
     
-    # Sell non-wheat inventory
+    # Sell inventory matching anti-glut logic
     has_animals = any(
         isinstance(tile, dict) and tile.get("kind") in ("COOP", "PASTURE") and tile.get("animal") is not None
         for row in tiles for tile in row
     )
     wheat_to_keep = 10 if has_animals else 0
+    shed_count = sum(private["shed"].values())
     
     for item, count in private["shed"].items():
         if count > 0:
-            if item == "WHEAT":
-                sell_qty = max(0, count - wheat_to_keep)
-                if sell_qty > 0:
-                    market_orders.append(["SELL", "WHEAT", sell_qty])
-            elif item in ("CARROT", "TOMATO", "STRAWBERRY", "MELON", "EGG", "MILK", "WOOL", "FERTILIZER"):
-                market_orders.append(["SELL", item, count])
+            # Check price threshold for selling (anti-glut strategy)
+            # Sell if: price is >= 50% of base price, OR shed is getting full (>=80), OR it's the final days (>=27)
+            price = market_prices.get(item, BASE_PRICES.get(item, 1.0))
+            base = BASE_PRICES.get(item, 1.0)
+            if price >= 0.5 * base or shed_count >= 80 or day >= 27:
+                if item == "WHEAT":
+                    sell_qty = max(0, count - wheat_to_keep)
+                    if sell_qty > 0:
+                        market_orders.append(["SELL", "WHEAT", sell_qty])
+                elif item in BASE_PRICES:
+                    market_orders.append(["SELL", item, count])
                 
     # Restrict all BUY and HIRE orders to Hour 0
     if hour == 0:
@@ -356,12 +413,30 @@ def agent(observation, configuration=None):
             total_wheat_owned = private["shed"].get("WHEAT", 0) + sum(inv.get("WHEAT", 0) for inv in unit_inventories)
             wheat_deficit = unfed_animals_count - total_wheat_owned
             if wheat_deficit > 0:
-                wheat_cost = market_prices.get("WHEAT", 25)
+                wheat_cost = market_prices.get("WHEAT", 25.0)
                 max_affordable = int((money - current_safety_buffer) // wheat_cost)
                 buy_qty = min(wheat_deficit, max_affordable)
                 if buy_qty > 0:
                     market_orders.append(["BUY_PRODUCT", "WHEAT", buy_qty])
                     money -= buy_qty * wheat_cost
+
+        # Fertilizer purchasing: buy fertilizer if we have Melon or Strawberry/Tomato crops that need it
+        fertilize_needed = sum(
+            1 for row in tiles for tile in row
+            if isinstance(tile, dict) and tile.get("kind") == "PLANT"
+            and tile["crop"] in ("MELON", "STRAWBERRY", "TOMATO")
+            and tile.get("fertilized_until_day", -1) < day
+            and (day - tile["planted_day"]) < CROPS[tile["crop"]]["max_yield_day"] - 2
+        )
+        fertilizer_owned = private["shed"].get("FERTILIZER", 0) + sum(inv.get("FERTILIZER", 0) for inv in unit_inventories)
+        fertilizer_needed = max(0, fertilize_needed - fertilizer_owned)
+        if fertilizer_needed > 0:
+            fertilizer_cost = market_prices.get("FERTILIZER", 100.0)
+            max_affordable = int((money - current_safety_buffer) // fertilizer_cost)
+            buy_qty = min(fertilizer_needed, max_affordable)
+            if buy_qty > 0:
+                market_orders.append(["BUY_PRODUCT", "FERTILIZER", buy_qty])
+                money -= buy_qty * fertilizer_cost
 
         # Seed purchasing (predicted_hands + num_units represents the capacity we will have today)
         empty_tiles = sum(1 for row in tiles for tile in row if tile is None)
@@ -370,16 +445,27 @@ def agent(observation, configuration=None):
         seeds_needed = min(empty_tiles - seeds_owned, additional_seeds_needed)
         
         if seeds_needed > 0:
-            wheat_profit = 4 * market_prices.get("WHEAT", 25) - 10
-            carrot_profit = 3 * market_prices.get("CARROT", 35) - 20
-            chosen_crop = "WHEAT" if wheat_profit >= carrot_profit else "CARROT"
-            seed_cost = CROPS[chosen_crop]["seed_cost"]
+            # Dynamic crop profit calculation for active buying selection
+            crop_profits = {}
+            remaining_days = 29 - day
             
-            max_affordable = int((money - current_safety_buffer) // seed_cost)
-            buy_qty = min(seeds_needed, max_affordable)
-            if buy_qty > 0:
-                market_orders.append(["BUY_SEED", chosen_crop, buy_qty])
-                money -= buy_qty * seed_cost
+            for crop in ["WHEAT", "CARROT", "TOMATO", "STRAWBERRY", "MELON"]:
+                crop_data = CROPS[crop]
+                # Only buy/plant if we have enough days left for it to mature
+                if remaining_days >= crop_data["max_yield_day"]:
+                    live_price = market_prices.get(crop, crop_data["base_price"])
+                    profit = crop_data["base_yield"] * live_price - crop_data["seed_cost"]
+                    crop_profits[crop] = profit
+                    
+            if crop_profits:
+                chosen_crop = max(crop_profits, key=crop_profits.get)
+                seed_cost = CROPS[chosen_crop]["seed_cost"]
+                
+                max_affordable = int((money - current_safety_buffer) // seed_cost)
+                buy_qty = min(seeds_needed, max_affordable)
+                if buy_qty > 0:
+                    market_orders.append(["BUY_SEED", chosen_crop, buy_qty])
+                    money -= buy_qty * seed_cost
             
     market_orders = market_orders[:10]
     
