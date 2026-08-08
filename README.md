@@ -1,6 +1,6 @@
-# Kaggriculture Simulation Bot & Test Bench
+# Kaggriculture Simulation Bot, Test Bench & Sabotage Engine
 
-This repository contains a suite of optimized simulation bots and a local evaluation test bench built for Kaggle's **Kaggriculture** competition—a turn-based, multi-agent farming simulation game.
+This repository contains a suite of optimized simulation bots, a local evaluation test bench, and a round-robin tournament engine built for Kaggle's **Kaggriculture** competition—a turn-based, multi-agent farming simulation game.
 
 ---
 
@@ -14,50 +14,79 @@ This repository contains a suite of optimized simulation bots and a local evalua
 
 ---
 
-## Strategy Evolution (Versions 1 to 8)
+## Strategy Evolution
 
 ### 1. The Heuristic Era (v1–v3)
-* **`main.py` (v1 Baseline):** Simple priority-queue based agent. Walks around watering crops, placing animals, and selling immediately. Net profit ~$17,400 vs. random.
-* **`main_v2.py` (Fertilizer Arbitrage):** Adds fertilizer priority scaling. Young Tomato and Strawberry crops are fertilized to double their yield, while Melon is ignored. Net profit ~$22,900 vs. random.
-* **`main_v3.py` (Livestock Safeguards):** Introduces turn-level Wheat inventory checks to buy feed immediately if animals are hungry, preventing animal starvation/escapes.
+* **[main.py](file:///Users/lavlinjaison/Desktop/python/kaggleculture/main.py):** Simple priority-queue based agent. Walks around watering crops, placing animals, and selling immediately. Net profit ~$17,400 vs. random.
+* **[main_v2.py](file:///Users/lavlinjaison/Desktop/python/kaggleculture/old/main_v2.py) (Fertilizer Arbitrage):** Adds fertilizer priority scaling. Young Tomato and Strawberry crops are fertilized to double their yield, while Melon is ignored. Net profit ~$22,900 vs. random.
+* **[main_v3.py](file:///Users/lavlinjaison/Desktop/python/kaggleculture/old/main_v3.py) (Livestock Safeguards):** Introduces turn-level Wheat inventory checks to buy feed immediately if animals are hungry, preventing animal starvation/escapes.
 
 ### 2. The Linear Programming Era (v4–v6)
-* **`main_v4.py` (10-Variable LP Solver):** Models Day 0 purchases using a 10-variable Linear Program (`scipy.optimize.linprog(method="highs")`) mapping both new purchases ($x_c$) and stock usage ($s_c$). Integrates dynamic worker limits and density-based land expansion to keep crops compact. Net profit ~$26,100 vs. random.
-* **`main_v5.py` (Dynamic Pricing & Safety Buffers):** Adds dynamic fertilizer pricing (holding fertilizer during gluts and selling when price $\ge \$80$) and animal purchase safety buffers (Goose needs $400, Cow needs $550).
-* **`main_v6.py` (Monoculture Optimization):** Restricts animal scaling to exactly 1 coop and 1 pasture. Prioritizes Melon/Strawberry monoculture and imports feed on the market rather than wasting crop tiles on low-value Wheat.
+* **[main_v4.py](file:///Users/lavlinjaison/Desktop/python/kaggleculture/old/main_v4.py) (10-Variable LP Solver):** Models Day 0 purchases using a 10-variable Linear Program (`scipy.optimize.linprog(method="highs")`) mapping both new purchases ($x_c$) and stock usage ($s_c$). Integrates dynamic worker limits and density-based land expansion to keep crops compact. Net profit ~$26,100 vs. random.
+* **[main_v5.py](file:///Users/lavlinjaison/Desktop/python/kaggleculture/old/main_v5.py) (Dynamic Pricing & Safety Buffers):** Adds dynamic fertilizer pricing (holding fertilizer during gluts and selling when price $\ge \$80$) and animal purchase safety buffers (Goose needs $400, Cow needs $550).
+* **[main_v6.py](file:///Users/lavlinjaison/Desktop/python/kaggleculture/old/main_v6.py) (Monoculture Optimization):** Restricts animal scaling to exactly 1 coop and 1 pasture. Prioritizes Melon/Strawberry monoculture and imports feed on the market rather than wasting crop tiles on low-value Wheat.
 
-### 3. The Optimization & Logistics Era (v7–v8)
-* **`main_v7.py` (Hyperparameter Tuned LP):** Grid-search optimized over 27 safety buffer, diversity cap, and price decay coordinates. Scored **$27,655** vs. random.
-* **`main_v8.py` (Hour-Level Cutoff & Safety Buffer Decay):** Adds hour-level remaining game time calculations mapping exact maturity limits and safety cash buffer decay ($200 scaling to $0 by Day 28) to release locked capital.
-* **Outcome:** Clean-sweep victory against all opponents on the tournament grid, and outclassed version 7 head-to-head (**$23,910** vs. **$18,275**).
+### 3. The Optimization & Logistics Era (v7–v9)
+* **[main_v7.py](file:///Users/lavlinjaison/Desktop/python/kaggleculture/old/main_v7.py) (Hyperparameter Tuned LP):** Grid-search optimized over 27 safety buffer, diversity cap, and price decay coordinates. Scored **$27,655** vs. random.
+* **[main_v8.py](file:///Users/lavlinjaison/Desktop/python/kaggleculture/main_v8.py) (Hour-Level Cutoff & Safety Buffer Decay):** Adds hour-level remaining game time calculations mapping exact maturity limits and safety cash buffer decay ($200 scaling to $0 by Day 28) to release locked capital. Clean-sweep victory against all v1–v7 opponents.
+* **[main_v9.py](file:///Users/lavlinjaison/Desktop/python/kaggleculture/main_v9.py) (Dynamic Capacity Limits):** Experimental version introducing adaptive capacity bounds and worker scheduling parameters adjusted dynamically by day progression. Underperforms in competitive sabotage scenarios.
+
+### 4. The Sabotage & Static-Schedule Era (Ben / Venks / Saboteurs)
+* **[ben.py](file:///Users/lavlinjaison/Desktop/python/kaggleculture/ben.py) (Optimized Static Schedule):** Implements a premium static execution schedule derived from top-tier replays. Features optimized pathfinding priorities, automatic center-tile drops, and a pasture list iterator fix.
+* **[ben_v2.py](file:///Users/lavlinjaison/Desktop/python/kaggleculture/ben_v2.py) (Hoarding & Fertilizer Capping):** Adds dynamic price hoarding (holding goods until market prices peak), fertilizer caps to minimize waste, and custom Day 18 Melon purchases.
+* **[venks_variant.py](file:///Users/lavlinjaison/Desktop/python/kaggleculture/venks_variant.py) (Shifted Schedules):** Explores timeline modifications to Venks schedules combined with adaptive price logic.
+* **[venks_killer.py](file:///Users/lavlinjaison/Desktop/python/kaggleculture/venks_killer.py) (Sabotage Hybrid fallback):** Dual-logic agent. Plays a dynamic general-purpose strategy by default, but switches to high-priority target front-running if it detects the static `venks` schedule from the opponent.
+* **[venks_killer_dynamic.py](file:///Users/lavlinjaison/Desktop/python/kaggleculture/venks_killer_dynamic.py) (Dynamic Opponent Shed Tracking):** Dynamically estimates the opponent's shed contents in real-time by tracking crop harvests and pasture collections, combined with farmer/hands location checks near the center shed. When items are detected in the opponent's inventory, it triggers front-running sells to crash the market price before the opponent can liquidate.
+* **[venks_killer_hybrid.py](file:///Users/lavlinjaison/Desktop/python/kaggleculture/venks_killer_hybrid.py) (1-Hour Schedule Shift & Front-Runner):** Plays the optimal schedule with a 1-hour shift starting at Step 0 (instead of Step 1) to preempt the opponent. Dynamically detects static opponents at Step 47 (inspecting melon tile counts) and injects targeted market sales exactly 1 step prior to opponent liquidations. Currently the **undefeated #1 rank** in the local tournament.
 
 ---
 
-## Head-to-Head Tournament Matrix
+## Double Round-Robin Tournament Leaderboard
 
-A round-robin tournament was simulated where every agent version played as both Player 0 (P0) and Player 1 (P1) against all other agents:
+All local agent variations are evaluated in a double round-robin tournament (double-sided play, 720 turns/episode) via [run_tournament.py](file:///Users/lavlinjaison/Desktop/python/kaggleculture/run_tournament.py).
 
-| Agent (P0) \ Opponent (P1) | random | starter | main.py | main_v2.py | main_v3.py | main_v4.py | main_v5.py | main_v6.py | main_v7.py | main_v8.py |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **random** | $0 / $0 | $0 / $3518 | $0 / $19052 | $0 / $22959 | $0 / $23680 | $40 / $25961 | $0 / $26155 | $0 / $25480 | $0 / $27658 | $0 / $27661 |
-| **starter** | $3516 / $0 | $3516 / $3516 | $3499 / $19052 | $3504 / $23073 | $3485 / $23177 | $3487 / $26210 | $3499 / $26142 | $3489 / $25849 | $3501 / $27662 | $3487 / $27674 |
-| **main.py** | $24973 / $0 | $15789 / $3510 | $13057 / $16354 | $13481 / $20808 | $13426 / $19160 | $14801 / $22330 | $13690 / $23150 | $18972 / $22098 | $10769 / $23790 | $12748 / $23385 |
-| **main_v2.py** | $23246 / $0 | $23342 / $3489 | $20243 / $16056 | $21290 / $19353 | $19661 / $21559 | $20670 / $24114 | $20628 / $24312 | $20547 / $24342 | $19442 / $25098 | $19494 / $25138 |
-| **main_v3.py** | $23250 / $40 | $23014 / $3509 | $22345 / $200 | $21143 / $21641 | $21645 / $21443 | $20586 / $24128 | $20931 / $24184 | $20859 / $24029 | $19199 / $25741 | $19723 / $25617 |
-| **main_v4.py** | $27975 / $110 | $26037 / $3507 | $23125 / $11420 | $24010 / $20666 | $23867 / $20233 | $22499 / $22499 | $22971 / $22971 | $22635 / $22635 | $19932 / $24260 | $22496 / $21349 |
-| **main_v5.py** | $25803 / $20 | $26043 / $3508 | $20562 / $12647 | $24325 / $20570 | $24289 / $21014 | $22879 / $22879 | $22905 / $22905 | $22618 / $22618 | $20246 / $24285 | $18121 / $24477 |
-| **main_v6.py** | $26227 / $0 | $25944 / $3487 | $23143 / $13690 | $24032 / $20585 | $24253 / $19759 | $19664 / $22988 | $22737 / $22737 | $22895 / $22895 | $20158 / $24259 | $20155 / $24269 |
-| **main_v7.py** | $27670 / $0 | $27667 / $3510 | $21331 / $13050 | $25133 / $19848 | $25721 / $18251 | $23387 / $20467 | $24290 / $20025 | $24287 / $20303 | $18264 / $23927 | $21013 / $21013 |
-| **main_v8.py** | **$27,662** / $0 | **$27,663** / $3,499 | **$23,394** / $9,390 | **$24,074** / $19,784 | **$25,444** / $19,198 | **$24,297** / $20,418 | **$24,294** / $20,357 | **$24,291** / $20,223 | **$23,910** / $18,275 | $19,575 / $23,956 |
+The current leaderboard results (persisted in [tournament_report.md](file:///Users/lavlinjaison/Desktop/python/kaggleculture/tournament_report.md)):
 
-*Values display: **P0 Cash Balance / P1 Cash Balance**.*
+| Rank | Agent Name | Wins | Draws | Losses | Points | Win Rate % | Avg Score |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **1** | [venks_killer_hybrid.py](file:///Users/lavlinjaison/Desktop/python/kaggleculture/venks_killer_hybrid.py) | 20 | 0 | 0 | **60** | 100.0% | $172,938.9 |
+| **2** | [venks_killer_dynamic.py](file:///Users/lavlinjaison/Desktop/python/kaggleculture/venks_killer_dynamic.py) | 18 | 0 | 2 | **54** | 90.0% | $157,593.1 |
+| **3** | [ben.py](file:///Users/lavlinjaison/Desktop/python/kaggleculture/ben.py) | 16 | 0 | 4 | **48** | 80.0% | $113,585.4 |
+| **4** | [venks_killer.py](file:///Users/lavlinjaison/Desktop/python/kaggleculture/venks_killer.py) | 14 | 0 | 6 | **42** | 70.0% | $80,394.0 |
+| **5** | [ben_v2.py](file:///Users/lavlinjaison/Desktop/python/kaggleculture/ben_v2.py) | 11 | 1 | 8 | **34** | 55.0% | $72,602.0 |
+| **6** | [venks_variant.py](file:///Users/lavlinjaison/Desktop/python/kaggleculture/venks_variant.py) | 10 | 1 | 9 | **31** | 50.0% | $71,269.0 |
+| **7** | [main_v8.py](file:///Users/lavlinjaison/Desktop/python/kaggleculture/main_v8.py) | 8 | 0 | 12 | **24** | 40.0% | $21,977.5 |
+| **8** | [main_v9.py](file:///Users/lavlinjaison/Desktop/python/kaggleculture/main_v9.py) | 5 | 0 | 15 | **15** | 25.0% | $11,799.9 |
+| **9** | [main.py](file:///Users/lavlinjaison/Desktop/python/kaggleculture/main.py) | 4 | 0 | 16 | **12** | 20.0% | $13,856.7 |
+| **10** | `starter` | 3 | 0 | 17 | **9** | 15.0% | $3,498.4 |
+| **11** | `random` | 0 | 0 | 20 | **0** | 0.0% | $1.5 |
 
 ---
 
 ## Project Structure
 
-- **[main_v8.py](main_v8.py)**: The peak tuned entry point for the Kaggle submission, housing the `agent(observation, configuration)` function.
-- **[run_local.py](run_local.py)**: A local match evaluation bench that plays the agent against other strategies (e.g. `random`, `starter`, or itself) and logs performance.
+```
+.
+├── ben.py                     # Static schedule bot with pathfinding improvements
+├── ben_v2.py                  # static schedule bot with price hoarding
+├── main.py                    # Heuristic bot (v1)
+├── main_v8.py                 # LP solver with safety buffer decay
+├── main_v9.py                 # LP solver with dynamic capacity
+├── old/                       # Archive of older LP iterations (v2–v7)
+│   ├── main_v2.py
+│   ├── main_v3.py
+│   ├── main_v4.py
+│   ├── main_v5.py
+│   ├── main_v6.py
+│   └── main_v7.py
+├── run_local.py               # Plays a single local match against a given strategy
+├── run_tournament.py          # Simulates a double round-robin tournament between all bots
+├── tournament_report.md       # Persisted tournament leaderboard markdown file
+├── venks_killer.py            # Sabotage fallback bot
+├── venks_killer_dynamic.py    # Sabotage bot with real-time opponent shed tracking
+├── venks_killer_hybrid.py     # Undefeated sabotage bot with 1-hour preemption logic
+└── venks_variant.py           # Venks schedule variants
+```
 
 ---
 
@@ -71,10 +100,18 @@ You need `python3`, `scipy`, and `kaggle-environments` installed.
 pip install -U kaggle-environments scipy --break-system-packages
 ```
 
-### Running the Local Test Bench
+### Running a Local Match
 
-Run the test bench script to play simulated episodes:
+Use [run_local.py](file:///Users/lavlinjaison/Desktop/python/kaggleculture/run_local.py) to simulate single episodes:
 
 ```bash
 python3 run_local.py
+```
+
+### Running the Tournament
+
+To update leaderboard standings after modifying strategies, run the tournament suite:
+
+```bash
+python3 run_tournament.py
 ```
